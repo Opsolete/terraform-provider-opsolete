@@ -166,3 +166,32 @@ type VCSConnection struct {
 	ProjectIDs   []string `json:"project_ids"`
 	WorkspaceIDs []string `json:"workspace_ids"`
 }
+
+type Runner struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Pool  string `json:"pool"`
+	Token string `json:"token"` // only when created with a new one
+}
+
+type VCSModule struct {
+	Namespace    string   `json:"namespace"`
+	Name         string   `json:"name"`
+	System       string   `json:"system"`
+	ConnectionID string   `json:"connection_id"`
+	Repo         string   `json:"repo"`
+	Dir          string   `json:"dir"`
+	TagPrefix    string   `json:"tag_prefix"`
+	SyncError    string   `json:"sync_error"`
+	Versions     []string `json:"versions"`
+}
+
+type TemplateCatalog struct {
+	ConnectionID string `json:"connection_id"`
+	Repo         string `json:"repo"`
+	Branch       string `json:"branch"`
+	Dir          string `json:"dir"`
+	Mode         string `json:"mode"`
+	Commit       string `json:"commit"`
+	SyncError    string `json:"sync_error"`
+}

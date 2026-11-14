@@ -1,7 +1,8 @@
 # terraform-provider-opsolete
 
 Manage [Opsolete](https://github.com/Opsolete/Opsolete)'s platform objects with Terraform: projects and their
-environment values, workspaces and their variables, variable sets (and where they apply) and VCS connections.
+environment values, workspaces and their variables, variable sets (and where they apply), VCS connections, runners,
+registry modules published from a repository and the template catalog.
 Templates on workspaces, runs and team access stay in Opsolete's UI.
 
 On the Terraform Registry: [opsolete/opsolete](https://registry.terraform.io/providers/Opsolete/opsolete/latest), with
@@ -49,12 +50,14 @@ resource "opsolete_workspace" "shop" {
 ```
 
 **The token** is a service token: Settings → API tokens in Opsolete, or `opsolete api-token terraform` on the server
-(it has admin rights and is audited as `token:<name>`). Needs **Opsolete 0.10.0** or later.
+(it has admin rights and is audited as `token:<name>`). Needs **Opsolete 0.10.0** or later; `opsolete_runner`, `opsolete_registry_module` and
+`opsolete_template_catalog` need **0.11.0**.
 
 Resources: `opsolete_project`, `opsolete_environment_value`, `opsolete_workspace`, `opsolete_workspace_variable`,
 `opsolete_variable_set`, `opsolete_variable_set_variable`, `opsolete_variable_set_project`,
-`opsolete_variable_set_workspace`, `opsolete_vcs_connection`. Data sources: `opsolete_project`,
-`opsolete_workspace`, `opsolete_variable_set`. All importable (by name where they have one). Reference:
+`opsolete_variable_set_workspace`, `opsolete_vcs_connection`, `opsolete_runner`, `opsolete_registry_module`,
+`opsolete_template_catalog`. Data sources: `opsolete_project`, `opsolete_workspace`, `opsolete_variable_set`,
+`opsolete_vcs_connection`. All importable (by name where they have one). Reference:
 [Registry docs](https://registry.terraform.io/providers/Opsolete/opsolete/latest/docs).
 
 Good to know:
@@ -76,8 +79,11 @@ Acceptance tests run real Terraform against a running Opsolete, creating and del
 TF_ACC=1 OPSOLETE_URL=http://localhost:8080 OPSOLETE_TOKEN=<service token> go test -v ./...
 # optional: a template's per-environment input, and a GitHub token Opsolete can check
 OPSOLETE_ACC_TEMPLATE_ID=<id> OPSOLETE_ACC_INPUT=location OPSOLETE_ACC_VALUES=westeurope,northeurope
-OPSOLETE_ACC_GITHUB_TOKEN=<token>
+OPSOLETE_ACC_GITHUB_TOKEN=<token>   # also publishes a module of Opsolete/terraform-modules-examples
 ```
+
+`TestAccTemplateCatalog` disconnects the catalog when it's done, so it skips an Opsolete whose catalog is connected:
+run it against a fresh one.
 
 CI (`.github/workflows/test.yml`) builds Opsolete's `master`, starts it on Postgres and runs them. A tag `v*` releases
 (`.github/workflows/release.yml`, goreleaser), signed with the release key (`EC1FE5F6A3AFC49E`, the secrets

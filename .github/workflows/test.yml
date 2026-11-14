@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        opsolete: [master, v0.10.0] # the newest and the oldest Opsolete it supports
+        opsolete: [master, v0.11.0] # the newest and the oldest Opsolete all its resources support
     services:
       postgres:
         image: postgres:17

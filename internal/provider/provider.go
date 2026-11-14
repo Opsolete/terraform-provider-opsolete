@@ -33,7 +33,7 @@ func (p *opsoleteProvider) Metadata(_ context.Context, _ provider.MetadataReques
 
 func (p *opsoleteProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages Opsolete's platform objects: projects and their environment values, workspaces and their variables, variable sets and VCS connections. Templates on workspaces, runs and team access stay in Opsolete's UI.",
+		Description: "Manages Opsolete's platform objects: projects and their environment values, workspaces and their variables, variable sets, VCS connections, runners, registry modules published from a repository and the template catalog. Templates on workspaces, runs and team access stay in Opsolete's UI.",
 		Attributes: map[string]schema.Attribute{
 			"url": schema.StringAttribute{
 				Description: "Opsolete's address, e.g. `https://opsolete.example.com`. Default: the `OPSOLETE_URL` environment variable.",
@@ -78,10 +78,10 @@ func (p *opsoleteProvider) Resources(context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		newProjectResource, newEnvironmentValueResource, newWorkspaceResource, newWorkspaceVariableResource,
 		newVariableSetResource, newVariableSetVariableResource, newVariableSetProjectResource, newVariableSetWorkspaceResource,
-		newVCSConnectionResource,
+		newVCSConnectionResource, newRunnerResource, newRegistryModuleResource, newTemplateCatalogResource,
 	}
 }
 
 func (p *opsoleteProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{newProjectDataSource, newWorkspaceDataSource, newVariableSetDataSource}
+	return []func() datasource.DataSource{newProjectDataSource, newWorkspaceDataSource, newVariableSetDataSource, newVCSConnectionDataSource}
 }
