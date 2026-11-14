@@ -9,11 +9,15 @@ permissions:
   contents: read
 
 jobs:
-  # vet, build, the generated docs current, and the acceptance tests: real Terraform against a real Opsolete (its
-  # master, built here, on Postgres) with a service token.
+  # vet, build, the generated docs current, and the acceptance tests: real Terraform against a real Opsolete (built
+  # here, on Postgres: its master and the oldest release the provider supports) with a service token.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        opsolete: [master, v0.10.0] # the newest and the oldest Opsolete it supports
     services:
       postgres:
         image: postgres:17
@@ -46,7 +50,7 @@ jobs:
         run: go generate ./... && git diff --exit-code docs
       - name: Opsolete
         run: |
-          go install github.com/opsolete/opsolete/cmd/opsolete@master
+          go install github.com/opsolete/opsolete/cmd/opsolete@${{ matrix.opsolete }}
           # a template with a per-environment input, for TestAccEnvironmentValue
           mkdir -p /tmp/catalog
           echo '{"id": "acc", "name": "Acc", "module": {"source": "git::https://example.com/m.git", "ref": "v1"}, "inputs": [
