@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -160,4 +162,58 @@ func (r *vcsConnectionResource) ImportState(ctx context.Context, req resource.Im
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+}
+
+// data "opsolete_vcs_connection": a VCS connection by name (never its token).
+
+type vcsConnectionDataSource struct{ base }
+
+func newVCSConnectionDataSource() datasource.DataSource { return &vcsConnectionDataSource{} }
+
+func (d *vcsConnectionDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_vcs_connection"
+}
+
+func (d *vcsConnectionDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	d.configure(req.ProviderData, &resp.Diagnostics)
+}
+
+func (d *vcsConnectionDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = dschema.Schema{
+		Description: "A VCS connection, by name: e.g. to publish registry modules or connect the template catalog with a connection made in the UI.",
+		Attributes: map[string]dschema.Attribute{
+			"name":          dschema.StringAttribute{Required: true},
+			"id":            dschema.StringAttribute{Computed: true},
+			"provider_type": dschema.StringAttribute{Computed: true},
+			"base_url":      dschema.StringAttribute{Computed: true},
+			"scope":         dschema.StringAttribute{Computed: true},
+		},
+	}
+}
+
+type vcsConnectionDataModel struct {
+	ID       types.String `tfsdk:"id"`
+	Name     types.String `tfsdk:"name"`
+	Provider types.String `tfsdk:"provider_type"`
+	BaseURL  types.String `tfsdk:"base_url"`
+	Scope    types.String `tfsdk:"scope"`
+}
+
+func (d *vcsConnectionDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var m vcsConnectionDataModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &m)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	id, err := d.byName(ctx, "/vcs-connections", m.Name.ValueString())
+	var c client.VCSConnection
+	if err == nil {
+		err = d.c.Do(ctx, "GET", client.Path("vcs-connections", id), nil, &c)
+	}
+	if err != nil {
+		apiError(&resp.Diagnostics, "Reading the VCS connection", err)
+		return
+	}
+	m.ID, m.Provider, m.BaseURL, m.Scope = types.StringValue(c.ID), types.StringValue(c.Provider), types.StringValue(c.BaseURL), types.StringValue(c.Scope)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }

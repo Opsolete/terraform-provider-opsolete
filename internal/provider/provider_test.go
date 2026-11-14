@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+
+	"github.com/opsolete/terraform-provider-opsolete/internal/client"
 )
 
 // Acceptance tests run real Terraform against a real Opsolete (TF_ACC=1, OPSOLETE_URL, OPSOLETE_TOKEN: a service
@@ -232,4 +235,148 @@ resource "opsolete_vcs_connection" "c" {
 			{ResourceName: "opsolete_vcs_connection.c", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"token"}},
 		},
 	})
+}
+
+// TestAccRunner: a runner with a token Opsolete creates (kept in the state), and one with a token from a secret store.
+func TestAccRunner(t *testing.T) {
+	sfx := suffix()
+	cfg := fmt.Sprintf(`
+resource "opsolete_runner" "made" {
+  name = "acc-%[1]s"
+  pool = "acc"
+}
+resource "opsolete_runner" "own" {
+  name  = "acc-own-%[1]s"
+  token = %[2]q
+}`, sfx, strings.Repeat("t", 40))
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { preCheck(t) },
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: cfg, Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("opsolete_runner.made", "pool", "acc"),
+				resource.TestCheckResourceAttrWith("opsolete_runner.made", "token", func(v string) error {
+					if !strings.HasPrefix(v, "opsr_") {
+						return fmt.Errorf("a created runner's token: %q", v)
+					}
+					return nil
+				}),
+				resource.TestCheckResourceAttr("opsolete_runner.own", "pool", "default"))},
+			{ResourceName: "opsolete_runner.made", ImportState: true, ImportStateId: "acc-" + sfx, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"token"}},
+		},
+	})
+}
+
+// TestAccRegistryModule publishes a module from a public GitHub repository's tags: needs a GitHub token Opsolete can
+// check (OPSOLETE_ACC_GITHUB_TOKEN); Opsolete/terraform-modules-examples' storage-account by default
+// (OPSOLETE_ACC_MODULE_REPO, OPSOLETE_ACC_MODULE_DIR: its folder and tag prefix <dir>-).
+func TestAccRegistryModule(t *testing.T) {
+	token := os.Getenv("OPSOLETE_ACC_GITHUB_TOKEN")
+	if token == "" {
+		t.Skip("OPSOLETE_ACC_GITHUB_TOKEN: a GitHub token Opsolete can check")
+	}
+	repo, dir := envOr("OPSOLETE_ACC_MODULE_REPO", "Opsolete/terraform-modules-examples"), envOr("OPSOLETE_ACC_MODULE_DIR", "storage-account")
+	sfx := suffix()
+	t.Setenv("TF_VAR_token", token)
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { preCheck(t) },
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: fmt.Sprintf(`
+variable "token" {
+  type      = string
+  sensitive = true
+}
+resource "opsolete_vcs_connection" "gh" {
+  name          = "acc-%[1]s"
+  provider_type = "github"
+  token         = var.token
+}
+data "opsolete_vcs_connection" "gh" {
+  name       = opsolete_vcs_connection.gh.name
+  depends_on = [opsolete_vcs_connection.gh]
+}
+resource "opsolete_registry_module" "m" {
+  vcs_connection_id = data.opsolete_vcs_connection.gh.id
+  repo              = %[2]q
+  dir               = %[3]q
+  tag_prefix        = "%[3]s-"
+  namespace         = "acc%[1]s"
+  name              = %[3]q
+  system            = "azurerm"
+}`, sfx, repo, dir), Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("opsolete_registry_module.m", "id", "acc"+sfx+"/"+dir+"/azurerm"),
+				resource.TestCheckResourceAttrWith("opsolete_registry_module.m", "versions.#", func(v string) error {
+					if v == "0" {
+						return fmt.Errorf("no version published from the tags")
+					}
+					return nil
+				}))},
+			{ResourceName: "opsolete_registry_module.m", ImportState: true, ImportStateVerify: true},
+		},
+	})
+}
+
+// TestAccTemplateCatalog connects the template catalog to a GitHub repository (OPSOLETE_ACC_GITHUB_TOKEN; the repo of
+// TestAccRegistryModule, a folder without templates) and disconnects it. Destroying it disconnects the catalog, so it
+// refuses to run on an Opsolete whose catalog is connected already.
+func TestAccTemplateCatalog(t *testing.T) {
+	token := os.Getenv("OPSOLETE_ACC_GITHUB_TOKEN")
+	if token == "" {
+		t.Skip("OPSOLETE_ACC_GITHUB_TOKEN: a GitHub token Opsolete can check")
+	}
+	preCheck(t)
+	c := testClient(t)
+	if err := c.Do(context.Background(), "GET", "/template-catalog", nil, nil); err == nil {
+		t.Skip("this Opsolete's template catalog is connected: the test would disconnect it")
+	}
+	repo, dir := envOr("OPSOLETE_ACC_MODULE_REPO", "Opsolete/terraform-modules-examples"), envOr("OPSOLETE_ACC_MODULE_DIR", "storage-account")
+	t.Setenv("TF_VAR_token", token)
+	cfg := func(mode string) string {
+		return fmt.Sprintf(`
+variable "token" {
+  type      = string
+  sensitive = true
+}
+resource "opsolete_vcs_connection" "gh" {
+  name          = "acc-cat-%[1]s"
+  provider_type = "github"
+  token         = var.token
+}
+resource "opsolete_template_catalog" "c" {
+  vcs_connection_id = opsolete_vcs_connection.gh.id
+  repo              = %[2]q
+  dir               = %[3]q
+  mode              = %[4]q
+}`, suffixOnce, repo, dir, mode)
+	}
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() {},
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{Config: cfg("off"), Check: resource.ComposeTestCheckFunc(
+				resource.TestCheckResourceAttr("opsolete_template_catalog.c", "branch", "main"),
+				resource.TestCheckResourceAttrSet("opsolete_template_catalog.c", "commit"))},
+			{Config: cfg("pr"), Check: resource.TestCheckResourceAttr("opsolete_template_catalog.c", "mode", "pr")},
+			{ResourceName: "opsolete_template_catalog.c", ImportState: true, ImportStateVerify: true},
+		},
+	})
+}
+
+var suffixOnce = suffix()
+
+func envOr(k, fallback string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func testClient(t *testing.T) *client.Client {
+	t.Helper()
+	c, err := client.New(os.Getenv("OPSOLETE_URL"), os.Getenv("OPSOLETE_TOKEN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
