@@ -4,10 +4,16 @@ Manage [Opsolete](https://github.com/Opsolete/Opsolete)'s platform objects with 
 environment values, workspaces and their variables, variable sets (and where they apply) and VCS connections.
 Templates on workspaces, runs and team access stay in Opsolete's UI.
 
+On the Terraform Registry: [opsolete/opsolete](https://registry.terraform.io/providers/Opsolete/opsolete/latest), with
+its [documentation](https://registry.terraform.io/providers/Opsolete/opsolete/latest/docs).
+
 ```hcl
 terraform {
   required_providers {
-    opsolete = { source = "opsolete/opsolete" }
+    opsolete = {
+      source  = "opsolete/opsolete"
+      version = "~> 0.1"
+    }
   }
 }
 
@@ -48,7 +54,8 @@ resource "opsolete_workspace" "shop" {
 Resources: `opsolete_project`, `opsolete_environment_value`, `opsolete_workspace`, `opsolete_workspace_variable`,
 `opsolete_variable_set`, `opsolete_variable_set_variable`, `opsolete_variable_set_project`,
 `opsolete_variable_set_workspace`, `opsolete_vcs_connection`. Data sources: `opsolete_project`,
-`opsolete_workspace`, `opsolete_variable_set`. All importable (by name where they have one). Reference: [docs](docs).
+`opsolete_workspace`, `opsolete_variable_set`. All importable (by name where they have one). Reference:
+[Registry docs](https://registry.terraform.io/providers/Opsolete/opsolete/latest/docs).
 
 Good to know:
 
@@ -73,8 +80,8 @@ OPSOLETE_ACC_GITHUB_TOKEN=<token>
 ```
 
 CI (`.github/workflows/test.yml`) builds Opsolete's `master`, starts it on Postgres and runs them. A tag `v*` releases
-(`.github/workflows/release.yml`, goreleaser): it needs the secrets `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`, and the
-provider added to the Terraform Registry with that key's public half.
+(`.github/workflows/release.yml`, goreleaser), signed with the release key (`EC1FE5F6A3AFC49E`, the secrets
+`GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`); the Terraform Registry picks up each new tag.
 
 ## License
 
