@@ -53,6 +53,8 @@ Resources: `opsolete_project`, `opsolete_environment_value`, `opsolete_workspace
 
 Good to know:
 
+- **States are Opsolete's alone.** The provider never touches a workspace's state (versions, rollbacks, locks), and
+  deleting a workspace whose state still manages resources fails: destroy them in Opsolete first.
 - **Sensitive values are write-only** in Opsolete (variables, VCS tokens): Terraform keeps the configured value and
   can't see a change made to it in the UI. They're in Terraform's state: keep that encrypted.
 - **Changes in the UI to managed objects** are reverted by the next apply, as with any provider.

@@ -3,12 +3,12 @@
 page_title: "opsolete_workspace Resource - opsolete"
 subcategory: ""
 description: |-
-  A workspace: one Terraform state and its runs. Created empty; templates are added to it in Opsolete's UI (adding one starts a plan).
+  A workspace: one Terraform state and its runs. Created empty; templates are added to it in Opsolete's UI (adding one starts a plan). Its state is Opsolete's alone: this provider never touches it, and deleting a workspace whose state still manages resources fails (destroy them in Opsolete first).
 ---
 
 # opsolete_workspace (Resource)
 
-A workspace: one Terraform state and its runs. Created empty; templates are added to it in Opsolete's UI (adding one starts a plan).
+A workspace: one Terraform state and its runs. Created empty; templates are added to it in Opsolete's UI (adding one starts a plan). Its state is Opsolete's alone: this provider never touches it, and deleting a workspace whose state still manages resources fails (destroy them in Opsolete first).
 
 ## Example Usage
 
@@ -33,7 +33,6 @@ resource "opsolete_workspace" "shop" {
 - `auto_apply` (Boolean) Apply plans without asking for confirmation.
 - `drift_detection` (Boolean) A daily drift check (a refresh-only plan, never applied).
 - `execution_mode` (String) `remote`: runs on Opsolete's runners; `local`: the Terraform CLI runs (a `cloud` block), Opsolete keeps the state.
-- `force_delete` (Boolean) Delete the workspace even while its state still manages resources (admins): they stay, unmanaged. Off: deleting such a workspace fails; destroy its resources first.
 - `project_id` (String) The project it's in; changing it moves the workspace (operate access on both). Default: the default project.
 
 ### Read-Only

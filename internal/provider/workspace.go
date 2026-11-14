@@ -28,7 +28,6 @@ type workspaceModel struct {
 	AutoApply      types.Bool   `tfsdk:"auto_apply"`
 	ExecutionMode  types.String `tfsdk:"execution_mode"`
 	DriftDetection types.Bool   `tfsdk:"drift_detection"`
-	ForceDelete    types.Bool   `tfsdk:"force_delete"`
 }
 
 func (m *workspaceModel) set(w client.Workspace) {
@@ -46,7 +45,7 @@ func (r *workspaceResource) Metadata(_ context.Context, req resource.MetadataReq
 
 func (r *workspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A workspace: one Terraform state and its runs. Created empty; templates are added to it in Opsolete's UI (adding one starts a plan).",
+		Description: "A workspace: one Terraform state and its runs. Created empty; templates are added to it in Opsolete's UI (adding one starts a plan). Its state is Opsolete's alone: this provider never touches it, and deleting a workspace whose state still manages resources fails (destroy them in Opsolete first).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, Description: "The workspace's id: it stays when the workspace is renamed or moved.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
@@ -61,8 +60,6 @@ func (r *workspaceResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Validators:  []validator.String{stringvalidator.OneOf("remote", "local")}},
 			"drift_detection": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
 				Description: "A daily drift check (a refresh-only plan, never applied)."},
-			"force_delete": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
-				Description: "Delete the workspace even while its state still manages resources (admins): they stay, unmanaged. Off: deleting such a workspace fails; destroy its resources first."},
 		},
 	}
 }
@@ -103,9 +100,6 @@ func (r *workspaceResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 	m.set(w)
-	if m.ForceDelete.IsNull() { // imported
-		m.ForceDelete = types.BoolValue(false)
-	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
 
@@ -136,12 +130,8 @@ func (r *workspaceResource) Delete(ctx context.Context, req resource.DeleteReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	p := client.Path("workspaces", m.ID.ValueString())
-	if m.ForceDelete.ValueBool() {
-		p += "?force=1"
-	}
-	if err := r.c.Do(ctx, "DELETE", p, nil, nil); err != nil && !client.IsNotFound(err) {
-		apiError(&resp.Diagnostics, "Deleting the workspace", err)
+	if err := r.c.Do(ctx, "DELETE", client.Path("workspaces", m.ID.ValueString()), nil, nil); err != nil && !client.IsNotFound(err) {
+		apiError(&resp.Diagnostics, "Deleting the workspace (its state must manage no resources: destroy them in Opsolete first)", err)
 	}
 }
 
