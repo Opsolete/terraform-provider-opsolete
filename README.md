@@ -43,8 +43,7 @@ resource "opsolete_workspace" "shop" {
 ```
 
 **The token** is a service token: Settings → API tokens in Opsolete, or `opsolete api-token terraform` on the server
-(it has admin rights and is audited as `token:<name>`). Needs Opsolete with the `/api/v1` platform objects (after
-0.9.0).
+(it has admin rights and is audited as `token:<name>`). Needs **Opsolete 0.10.0** or later.
 
 Resources: `opsolete_project`, `opsolete_environment_value`, `opsolete_workspace`, `opsolete_workspace_variable`,
 `opsolete_variable_set`, `opsolete_variable_set_variable`, `opsolete_variable_set_project`,
@@ -76,3 +75,7 @@ OPSOLETE_ACC_GITHUB_TOKEN=<token>
 CI (`.github/workflows/test.yml`) builds Opsolete's `master`, starts it on Postgres and runs them. A tag `v*` releases
 (`.github/workflows/release.yml`, goreleaser): it needs the secrets `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`, and the
 provider added to the Terraform Registry with that key's public half.
+
+## License
+
+[Mozilla Public License 2.0](LICENSE).
