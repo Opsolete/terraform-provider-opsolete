@@ -1,0 +1,68 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # vet, build, the generated docs current, and the acceptance tests: real Terraform against a real Opsolete (its
+  # master, built here, on Postgres) with a service token.
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsolete
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/opsolete?sslmode=disable
+      SECRET_KEY: ci-secret-key-for-the-acceptance-tests-only
+      STATE_STORE: file:///tmp/state?create_dir=1&metadata=skip
+      AUTH_DEV_USER: ci@localhost
+      ADMIN_EMAILS: ci@localhost
+      TEMPLATES_DIR: /tmp/catalog
+      OPSOLETE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - run: go vet ./... && go build ./...
+      - name: docs are generated from the current schema and examples
+        run: go generate ./... && git diff --exit-code docs
+      - name: Opsolete
+        run: |
+          go install github.com/opsolete/opsolete/cmd/opsolete@master
+          # a template with a per-environment input, for TestAccEnvironmentValue
+          mkdir -p /tmp/catalog
+          echo '{"id": "acc", "name": "Acc", "module": {"source": "git::https://example.com/m.git", "ref": "v1"}, "inputs": [
+            {"name": "location", "type": "select", "options": ["westeurope", "northeurope"], "default": "westeurope", "per_environment": true}]}' > /tmp/catalog/acc.json
+          nohup opsolete > /tmp/opsolete.log 2>&1 &
+          for _ in $(seq 60); do curl -sf http://localhost:8080/readyz && break; sleep 1; done
+          token=$(openssl rand -hex 32)
+          OPS_TOKEN=$token opsolete api-token -from-env OPS_TOKEN ci
+          echo "::add-mask::$token"
+          echo "OPSOLETE_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: acceptance tests
+        env:
+          TF_ACC: "1"
+          OPSOLETE_ACC_TEMPLATE_ID: acc
+          OPSOLETE_ACC_INPUT: location
+          OPSOLETE_ACC_VALUES: westeurope,northeurope
+        run: go test -count=1 -timeout 15m -v ./...
+      - if: failure()
+        run: tail -50 /tmp/opsolete.log
